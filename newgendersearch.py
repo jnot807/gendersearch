@@ -30,8 +30,8 @@ if "Wiki_Gendersort.py" in os.listdir(repo_path):
 else:
     print("❌ ERROR: Could not find Wiki_Gendersort.py. Make sure it exists in your repo and is at the root level.")
 
-# Google CSE API Credentials
-API_KEY = input("Enter Google CSE API Key: ")
+# Hardcoded Google CSE API Key
+API_KEY = "AIzaSyBuskvy0h2pfBTyMsqmsb659duKYq2sCP8"
 
 # Display a message when the script is run
 print("\nScript is running as scheduled. Please provide the necessary inputs below.\n")
@@ -41,74 +41,70 @@ CSE_ID = input("Enter the Custom Search Engine ID (CSE ID): ")  # Prompt for CSE
 query = input("Enter the search query: ")  # Prompt for search query
 num_results = int(input("Enter the number of gender-matching results to fetch (e.g., 100): "))  # Desired results
 
-# Prompt for gender selection
 gender = input("Enter the gender to filter (male/female): ").lower()
 
-# Set the path where results will be saved
 folder_path = os.path.join(os.getcwd(), "Search_Results")
-
-# Ensure the folder exists, create it if necessary
 if not os.path.exists(folder_path):
     os.makedirs(folder_path)
 
-# Create a unique filename based on the query and timestamp
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-filename = f"{query.replace(' ', '_')}_{timestamp}.html"  # Replace spaces with underscores
+filename = f"{query.replace(' ', '_')}_{timestamp}.html"
 html_filename = os.path.join(folder_path, filename)
 
-# Fetch Google CSE Results
 results = []
-start_index = 1  # Start index for Google API pagination
-batch_size = 10  # Number of results fetched per API call
+start_index = 1
+batch_size = 10
+
+full_query = f'"{query}"'
+
+print(f"🔍 Final Google Search Query: {full_query}")
+print(f"🔑 Using API Key: {API_KEY}")
+print(f"🌐 Using CSE ID: {CSE_ID}")
 
 while len(results) < num_results:
-    url = f"https://www.googleapis.com/customsearch/v1?q={query}&key={API_KEY}&cx={CSE_ID}&start={start_index}"
+    url = f"https://www.googleapis.com/customsearch/v1?q={full_query}&key={API_KEY}&cx={CSE_ID}&start={start_index}"
+    print(f"📢 API Request: {url}")
     response = requests.get(url)
-    data = response.json()
-
+    print(f"🔍 Response Status Code: {response.status_code}")
+    
+    try:
+        data = response.json()
+        print(f"🔍 API Response: {data}")
+    except Exception as e:
+        print(f"⚠️ JSON Parsing Error: {e}")
+        break
+    
     if 'items' not in data:
-        print("No more results available.")
-        break  # Stop if no more results are available
+        print("⚠️ No results found. Check if your query is formatted correctly.")
+        break
 
     for item in data['items']:
         if len(results) >= num_results:
-            break  # Stop if we have enough gender-matching results
-
-        title = item['title']  # The title or name of the result
-        link = item['link']    # The URL of the result
-
-        # Extract the first name from the title (you can adjust this logic as needed)
-        name = title.split()[0] if title else ""
-
-        # Use Wiki-Gendersort to predict the gender
-        predicted_gender = gender_sorter.assign(name)
+            break
         
-        # Print the predicted gender for debugging
+        title = item.get('title', "Unknown")
+        link = item.get('link', "No Link")
+        name = title.split()[0] if title else ""
+        
+        predicted_gender = gender_sorter.assign(name) if name else "UNK"
         print(f"Predicted gender for '{name}': {predicted_gender}")
-
-        # Compare predicted gender (handle case sensitivity and "UNK")
+        
         if (predicted_gender == "F" and gender == "female") or (predicted_gender == "M" and gender == "male"):
-            results.append([title, link])  # Store title and link if gender matches
+            results.append([title, link])
         else:
-            # Print for skipped names if they don't match the gender
             print(f"Skipping '{name}' due to gender mismatch (predicted: {predicted_gender}, filtered: {gender})")
-
-    # Increase start index for the next batch
+    
     start_index += batch_size
 
-# Write results to HTML
 with open(html_filename, mode='w', encoding='utf-8') as file:
-    # Start HTML structure
     file.write('<html>\n<head>\n<title>Search Results</title>\n</head>\n<body>\n')
-    file.write('<h1>Search Results for: "{}"</h1>\n'.format(query))  # Title
+    file.write(f'<h1>Search Results for: "{query}"</h1>\n')
     file.write('<table border="1" cellpadding="10" cellspacing="0">\n')
-    file.write('<tr><th>Title</th><th>Link</th></tr>\n')  # Table headers
-
-    # Write each result as a row in the table
+    file.write('<tr><th>Title</th><th>Link</th></tr>\n')
+    
     for title, link in results:
         file.write(f'<tr><td>{title}</td><td><a href="{link}" target="_blank">{link}</a></td></tr>\n')
-
-    # End HTML structure
+    
     file.write('</table>\n</body>\n</html>\n')
 
 print(f"Results saved to {html_filename}")
